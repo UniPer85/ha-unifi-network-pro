@@ -1,12 +1,12 @@
 {
   "domain": "unifi_network_pro",
   "name": "UniFi Network Pro",
-  "codeowners": ["@homeassistant"],
+  "codeowners": ["@UniPer85"],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/yourusername/unifi_network_pro",
+  "documentation": "https://github.com/UniPer85/ha-unifi-network-pro",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/yourusername/unifi_network_pro/issues",
+  "issue_tracker": "https://github.com/UniPer85/ha-unifi-network-pro/issues",
   "requirements": ["aiohttp>=3.8.0"],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

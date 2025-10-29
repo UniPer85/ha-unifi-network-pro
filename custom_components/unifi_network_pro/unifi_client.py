@@ -1,7 +1,10 @@
 """UniFi API client for UDM Pro Max."""
 from __future__ import annotations
 
+import asyncio
+import json
 import logging
+from pathlib import Path
 from typing import Any
 
 import aiohttp
@@ -18,9 +21,12 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Extended timeout for 2FA authentication (60 seconds)
+LOGIN_TIMEOUT = 60
+
 
 class UniFiClient:
-    """UniFi API client."""
+    """UniFi API client with persistent session support."""
 
     def __init__(
         self,
@@ -29,20 +35,80 @@ class UniFiClient:
         password: str,
         session: aiohttp.ClientSession,
         verify_ssl: bool = False,
+        cookie_file: Path | None = None,
     ) -> None:
-        """Initialize the UniFi client."""
+        """Initialize the UniFi client.
+
+        Args:
+            host: UniFi controller host URL
+            username: Username for authentication
+            password: Password for authentication
+            session: aiohttp ClientSession
+            verify_ssl: Whether to verify SSL certificates
+            cookie_file: Optional path to store session cookies for persistence
+        """
         self.host = host.rstrip("/")
         self.username = username
         self.password = password
         self.session = session
         self.verify_ssl = verify_ssl
         self.site_id = DEFAULT_SITE_ID
+        self.cookie_file = cookie_file
         self._headers = {
             "Content-Type": "application/json",
         }
+        self._authenticated = False
 
-    async def login(self) -> bool:
-        """Log in to the UniFi controller."""
+        # Load saved cookies if available
+        if self.cookie_file and self.cookie_file.exists():
+            asyncio.create_task(self._load_cookies())
+
+    async def _load_cookies(self) -> None:
+        """Load saved cookies from file."""
+        try:
+            if self.cookie_file and self.cookie_file.exists():
+                with open(self.cookie_file, "r") as f:
+                    cookies_data = json.load(f)
+                    for cookie in cookies_data:
+                        self.session.cookie_jar.update_cookies({cookie["key"]: cookie["value"]})
+                _LOGGER.debug("Loaded %d cookies from storage", len(cookies_data))
+        except Exception as err:
+            _LOGGER.warning("Failed to load cookies: %s", err)
+
+    async def _save_cookies(self) -> None:
+        """Save current cookies to file."""
+        try:
+            if self.cookie_file:
+                cookies_data = []
+                for cookie in self.session.cookie_jar:
+                    cookies_data.append({
+                        "key": cookie.key,
+                        "value": cookie.value,
+                    })
+
+                # Ensure parent directory exists
+                self.cookie_file.parent.mkdir(parents=True, exist_ok=True)
+
+                with open(self.cookie_file, "w") as f:
+                    json.dump(cookies_data, f)
+                _LOGGER.debug("Saved %d cookies to storage", len(cookies_data))
+        except Exception as err:
+            _LOGGER.warning("Failed to save cookies: %s", err)
+
+    async def login(self, timeout: int = LOGIN_TIMEOUT) -> bool:
+        """Log in to the UniFi controller.
+
+        Args:
+            timeout: Timeout in seconds (default 60s to allow for 2FA)
+
+        Returns:
+            True if login successful, False otherwise
+        """
+        # Check if we already have valid cookies
+        if self._authenticated:
+            _LOGGER.debug("Already authenticated, skipping login")
+            return True
+
         url = f"{self.host}{API_LOGIN}"
         data = {
             "username": self.username,
@@ -51,11 +117,21 @@ class UniFiClient:
         }
 
         try:
+            _LOGGER.info("Attempting login to UniFi controller (timeout: %ds)", timeout)
+            _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app")
+
             async with self.session.post(
-                url, json=data, headers=self._headers, ssl=self.verify_ssl
+                url,
+                json=data,
+                headers=self._headers,
+                ssl=self.verify_ssl,
+                timeout=aiohttp.ClientTimeout(total=timeout)
             ) as response:
                 if response.status == 200:
                     _LOGGER.info("Successfully logged in to UniFi controller")
+                    self._authenticated = True
+                    # Save cookies for future sessions
+                    await self._save_cookies()
                     return True
                 else:
                     error_text = await response.text()
@@ -64,13 +140,22 @@ class UniFiClient:
                         response.status,
                         error_text,
                     )
+                    self._authenticated = False
                     return False
+        except asyncio.TimeoutError:
+            _LOGGER.error(
+                "Login timeout after %ds - 2FA approval may not have been completed in time",
+                timeout
+            )
+            self._authenticated = False
+            raise
         except Exception as err:
             _LOGGER.error("Login error: %s", err)
+            self._authenticated = False
             raise
 
     async def logout(self) -> None:
-        """Log out from the UniFi controller."""
+        """Log out from the UniFi controller and clear saved cookies."""
         url = f"{self.host}{API_LOGOUT}"
         try:
             async with self.session.post(
@@ -78,11 +163,29 @@ class UniFiClient:
             ) as response:
                 if response.status == 200:
                     _LOGGER.info("Successfully logged out from UniFi controller")
+
+            # Clear authentication state and saved cookies
+            self._authenticated = False
+            self.session.cookie_jar.clear()
+
+            # Remove cookie file
+            if self.cookie_file and self.cookie_file.exists():
+                self.cookie_file.unlink()
+                _LOGGER.debug("Removed saved cookies")
+
         except Exception as err:
             _LOGGER.error("Logout error: %s", err)
 
-    async def _make_request(self, endpoint: str) -> dict[str, Any]:
-        """Make an API request."""
+    async def _make_request(self, endpoint: str, retry_on_401: bool = True) -> dict[str, Any]:
+        """Make an API request.
+
+        Args:
+            endpoint: API endpoint to call
+            retry_on_401: Whether to retry after re-authentication on 401 errors
+
+        Returns:
+            API response data
+        """
         url = f"{self.host}{endpoint.format(site=self.site_id)}"
 
         try:
@@ -91,11 +194,21 @@ class UniFiClient:
             ) as response:
                 if response.status == 200:
                     data = await response.json()
+                    # Mark as authenticated if request succeeds
+                    self._authenticated = True
                     return data.get("data", [])
                 elif response.status == 401:
-                    _LOGGER.warning("Session expired, attempting to re-login")
+                    _LOGGER.warning("Session expired (401), attempting to re-login")
+                    self._authenticated = False
+
+                    if not retry_on_401:
+                        _LOGGER.error("Re-authentication failed")
+                        return []
+
+                    # Re-authenticate
                     await self.login()
-                    # Retry the request
+
+                    # Retry the request once
                     async with self.session.get(
                         url, headers=self._headers, ssl=self.verify_ssl, timeout=aiohttp.ClientTimeout(total=10)
                     ) as retry_response:

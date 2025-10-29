@@ -4,12 +4,14 @@ A comprehensive Home Assistant custom integration for monitoring and managing Ub
 
 ## Features
 
+- **🔐 2FA Support**: Full support for Unifi Verify two-factor authentication with persistent sessions
 - **Real-time Network Monitoring**: Track network performance metrics including upload/download speeds, latency, and data usage
 - **Device Tracking**: Automatically discover and track all devices connected to your network
 - **System Monitoring**: Monitor UDM Pro Max CPU usage, memory usage, and uptime
 - **Rich Entity Support**: Provides sensors and device trackers with comprehensive attributes
 - **Easy Configuration**: User-friendly config flow through the Home Assistant UI
 - **HACS Compatible**: Easy installation and updates through HACS
+- **Session Persistence**: Login once, stay authenticated across restarts (no repeated 2FA approvals)
 
 ## Sensors Provided
 
@@ -65,7 +67,7 @@ Each network client is automatically discovered and added as a device tracker en
 2. Click on "Integrations"
 3. Click the three dots in the top right corner
 4. Select "Custom repositories"
-5. Add this repository URL: `https://github.com/yourusername/unifi_network_pro`
+5. Add this repository URL: `https://github.com/UniPer85/ha-unifi-network-pro`
 6. Select category "Integration"
 7. Click "Add"
 8. Search for "UniFi Network Pro" in HACS
@@ -99,11 +101,15 @@ You'll be prompted to enter:
 - **Site ID**: The site ID (default is "default" for most installations)
 - **Verify SSL**: Whether to verify SSL certificates (leave unchecked for self-signed certificates)
 
-### Step 3: Complete Setup
+### Step 3: Complete Setup (with 2FA Support)
 
 - Click **Submit**
 - The integration will connect to your UniFi controller and validate credentials
+- **If you have 2FA enabled**: Check your **Unifi Verify app** and approve the login within 60 seconds
 - Once successful, all sensors and device trackers will be automatically created
+- Your session will be saved - **no need to approve 2FA again on restart!**
+
+**📱 2FA Users**: See the detailed [2FA Setup Guide](2FA_SETUP.md) for more information about authentication, session persistence, and troubleshooting.
 
 ## Dashboard Configuration
 
@@ -160,8 +166,9 @@ Contributions are welcome! Please read our contributing guidelines before submit
 If you encounter issues:
 
 1. Check the [Troubleshooting Guide](TROUBLESHOOTING.md)
-2. Search existing [GitHub Issues](https://github.com/yourusername/unifi_network_pro/issues)
-3. Create a new issue with:
+2. Check the [2FA Setup Guide](2FA_SETUP.md) if you have authentication issues
+3. Search existing [GitHub Issues](https://github.com/UniPer85/ha-unifi-network-pro/issues)
+4. Create a new issue with:
    - Home Assistant version
    - Integration version
    - UDM Pro Max firmware version

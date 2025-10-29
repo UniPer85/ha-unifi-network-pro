@@ -30,7 +30,11 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 
 
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
-    """Validate the user input allows us to connect."""
+    """Validate the user input allows us to connect.
+
+    This function will wait up to 60 seconds for login to complete,
+    allowing time for 2FA approval via Unifi Verify app.
+    """
     host = data[CONF_HOST]
     if not host.startswith("http"):
         host = f"https://{host}"
@@ -49,9 +53,12 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         client.site_id = data[CONF_SITE_ID]
 
     try:
-        login_success = await client.login()
+        _LOGGER.info("Attempting to connect to UniFi controller...")
+        _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app within 60 seconds")
+
+        login_success = await client.login(timeout=60)  # 60 second timeout for 2FA
         if not login_success:
-            raise ValueError("Login failed")
+            raise ValueError("Login failed - check credentials or 2FA approval")
     except Exception as err:
         _LOGGER.error("Connection failed: %s", err)
         raise

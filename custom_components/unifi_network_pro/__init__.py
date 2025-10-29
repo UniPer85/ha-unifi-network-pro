@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from pathlib import Path
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -33,13 +34,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     password = entry.data[CONF_PASSWORD]
     verify_ssl = entry.data.get(CONF_VERIFY_SSL, False)
 
+    # Create cookie storage path for persistent sessions
+    storage_path = Path(hass.config.path(f".storage/{DOMAIN}"))
+    storage_path.mkdir(parents=True, exist_ok=True)
+    cookie_file = storage_path / f"{entry.entry_id}_cookies.json"
+
     session = async_get_clientsession(hass, verify_ssl=verify_ssl)
-    client = UniFiClient(host, username, password, session, verify_ssl)
+    client = UniFiClient(
+        host,
+        username,
+        password,
+        session,
+        verify_ssl,
+        cookie_file=cookie_file,
+    )
 
     try:
+        _LOGGER.info("Connecting to UniFi controller at %s", host)
         await client.login()
     except Exception as err:
         _LOGGER.error("Error connecting to UniFi controller: %s", err)
+        _LOGGER.error("If you have 2FA enabled, ensure you approved the login request")
         raise ConfigEntryNotReady from err
 
     async def async_update_data():
