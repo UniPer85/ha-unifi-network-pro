@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to UniFi Network",
+        "description": "Enter your UniFi controller credentials",
+        "data": {
+          "host": "Host (IP or hostname)",
+          "username": "Username",
+          "password": "Password",
+          "site_id": "Site ID",
+          "verify_ssl": "Verify SSL Certificate"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the UniFi controller",
+      "invalid_auth": "Invalid authentication credentials",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "This UniFi controller is already configured"
+    }
+  }
+}

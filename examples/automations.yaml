@@ -1,0 +1,232 @@
+# Example Automations for UniFi Network Pro
+
+# Notify when new device connects
+- alias: "Notify on New Device Connected"
+  description: "Send notification when a new device joins the network"
+  trigger:
+    - platform: state
+      entity_id: sensor.unifi_network_connected_clients
+  condition:
+    - condition: template
+      value_template: "{{ trigger.to_state.state | int > trigger.from_state.state | int }}"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "New Network Device"
+        message: "A new device connected to the network. Total: {{ states('sensor.unifi_network_connected_clients') }} devices"
+        data:
+          importance: high
+
+# Alert on high CPU usage
+- alias: "Alert on High UDM CPU Usage"
+  description: "Alert when UDM CPU usage exceeds 80%"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.unifi_network_cpu_usage
+      above: 80
+      for:
+        minutes: 5
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "High CPU Usage"
+        message: "UDM Pro Max CPU usage is {{ states('sensor.unifi_network_cpu_usage') }}%"
+    - service: notify.mobile_app_your_phone
+      data:
+        message: "UDM CPU usage critical: {{ states('sensor.unifi_network_cpu_usage') }}%"
+
+# Track when specific device comes home
+- alias: "Welcome Home"
+  description: "Actions when John's phone connects to WiFi"
+  trigger:
+    - platform: state
+      entity_id: device_tracker.johns_iphone
+      from: "not_home"
+      to: "home"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        message: "John just arrived home"
+    - service: light.turn_on
+      target:
+        entity_id: light.entrance
+    - service: climate.set_temperature
+      target:
+        entity_id: climate.living_room
+      data:
+        temperature: 22
+
+# Monitor network performance
+- alias: "Alert on Slow Internet"
+  description: "Alert when download speed drops significantly"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.unifi_network_wan_download_speed
+      below: 100
+      for:
+        minutes: 5
+  condition:
+    - condition: time
+      after: "08:00:00"
+      before: "22:00:00"
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "Slow Internet Detected"
+        message: "Download speed is only {{ states('sensor.unifi_network_wan_download_speed') }} Mbps"
+
+# Daily network summary
+- alias: "Daily Network Summary"
+  description: "Send daily report of network statistics"
+  trigger:
+    - platform: time
+      at: "20:00:00"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "Daily Network Summary"
+        message: |
+          Today's Network Stats:
+          - Devices: {{ states('sensor.unifi_network_connected_clients') }}
+          - WAN IP: {{ states('sensor.unifi_network_wan_ip_address') }}
+          - Uptime: {{ (states('sensor.unifi_network_uptime') | int / 86400) | round(1) }} days
+          - CPU: {{ states('sensor.unifi_network_cpu_usage') }}%
+          - Memory: {{ states('sensor.unifi_network_memory_usage') }}%
+
+# Alert on WAN IP change
+- alias: "WAN IP Changed"
+  description: "Notify when public IP address changes"
+  trigger:
+    - platform: state
+      entity_id: sensor.unifi_network_wan_ip_address
+  condition:
+    - condition: template
+      value_template: "{{ trigger.from_state.state != 'unknown' }}"
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "WAN IP Changed"
+        message: "Public IP changed from {{ trigger.from_state.state }} to {{ trigger.to_state.state }}"
+
+# Monitor device data usage
+- alias: "High Bandwidth Usage Alert"
+  description: "Alert when total daily bandwidth exceeds threshold"
+  trigger:
+    - platform: time_pattern
+      hours: "/1"  # Check every hour
+  condition:
+    - condition: template
+      value_template: >
+        {% set daily_download = states('sensor.unifi_network_wan_download_total') | int %}
+        {% set threshold = 100000000000 %}  {# 100 GB #}
+        {{ daily_download > threshold }}
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "High Data Usage"
+        message: "Network has used over 100GB today"
+
+# Presence-based automation
+- alias: "Nobody Home - Security Mode"
+  description: "Enable security features when all devices are away"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.unifi_network_connected_clients
+      below: 3  # Just infrastructure devices
+      for:
+        minutes: 30
+  action:
+    - service: alarm_control_panel.alarm_arm_away
+      target:
+        entity_id: alarm_control_panel.home
+    - service: climate.set_preset_mode
+      target:
+        entity_id: climate.living_room
+      data:
+        preset_mode: "away"
+    - service: light.turn_off
+      target:
+        entity_id: all
+
+# Network health check
+- alias: "Network Health Issues"
+  description: "Alert on high latency or packet loss"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.unifi_network_wan_latency
+      above: 100
+      for:
+        minutes: 5
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "High Network Latency"
+        message: "WAN latency is {{ states('sensor.unifi_network_wan_latency') }}ms - Network issues detected"
+
+# Guest network activity
+- alias: "Guest Connected"
+  description: "Notify when device connects to guest network"
+  trigger:
+    - platform: state
+      entity_id: device_tracker.*
+      to: "home"
+  condition:
+    - condition: template
+      value_template: "{{ 'guest' in state_attr(trigger.entity_id, 'wifi_network') | lower }}"
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        message: "A guest device connected: {{ state_attr(trigger.entity_id, 'hostname') }}"
+
+# Scheduled speed test reminder
+- alias: "Weekly Speed Test Reminder"
+  description: "Remind to run speed test weekly"
+  trigger:
+    - platform: time
+      at: "10:00:00"
+  condition:
+    - condition: time
+      weekday:
+        - sun
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "Speed Test Reminder"
+        message: "Don't forget to run a speed test in UniFi this week to update stats"
+
+# Device reconnection tracking
+- alias: "Device Keeps Disconnecting"
+  description: "Alert if device disconnects/reconnects frequently"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: device_tracker.*
+      to: "home"
+  action:
+    - condition: template
+      value_template: >
+        {% set count = states.automation.device_keeps_disconnecting.attributes.current %}
+        {{ count | int > 5 }}
+    - service: notify.mobile_app_your_phone
+      data:
+        message: "{{ state_attr(trigger.entity_id, 'hostname') }} has reconnected {{ count }} times in the last hour"
+
+# Bandwidth cap monitoring
+- alias: "Approaching Bandwidth Cap"
+  description: "Warning when approaching monthly data cap"
+  trigger:
+    - platform: time
+      at: "09:00:00"
+  condition:
+    - condition: template
+      value_template: >
+        {% set monthly_limit = 1000000000000 %}  {# 1TB #}
+        {% set current = states('sensor.unifi_network_wan_download_total') | int %}
+        {{ current > (monthly_limit * 0.8) }}
+  action:
+    - service: notify.mobile_app_your_phone
+      data:
+        title: "Bandwidth Warning"
+        message: "You've used 80% of your monthly bandwidth cap"
+        data:
+          importance: high

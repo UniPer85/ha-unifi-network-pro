@@ -1,0 +1,90 @@
+# Basic UniFi Network Pro Dashboard Configuration
+# This is a simple dashboard showing key network metrics
+
+title: UniFi Network
+views:
+  - title: Network Overview
+    path: network
+    icon: mdi:network
+    cards:
+      # Network Overview Card
+      - type: entities
+        title: Network Status
+        entities:
+          - entity: sensor.unifi_network_connected_clients
+            name: Connected Devices
+            icon: mdi:devices
+          - entity: sensor.unifi_network_wan_ip_address
+            name: WAN IP
+            icon: mdi:ip-network
+          - entity: sensor.unifi_network_cpu_usage
+            name: CPU Usage
+            icon: mdi:cpu-64-bit
+          - entity: sensor.unifi_network_memory_usage
+            name: Memory Usage
+            icon: mdi:memory
+          - entity: sensor.unifi_network_uptime
+            name: Uptime
+            icon: mdi:clock-outline
+
+      # Network Speed Gauges
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.unifi_network_wan_download_speed
+            name: Download Speed
+            min: 0
+            max: 1000
+            severity:
+              green: 500
+              yellow: 200
+              red: 0
+          - type: gauge
+            entity: sensor.unifi_network_wan_upload_speed
+            name: Upload Speed
+            min: 0
+            max: 100
+            severity:
+              green: 50
+              yellow: 20
+              red: 0
+
+      # Data Usage Statistics
+      - type: entities
+        title: Data Usage
+        entities:
+          - entity: sensor.unifi_network_wan_download_total
+            name: WAN Downloaded
+            icon: mdi:download-network
+          - entity: sensor.unifi_network_wan_upload_total
+            name: WAN Uploaded
+            icon: mdi:upload-network
+          - entity: sensor.unifi_network_lan_download_total
+            name: LAN Downloaded
+            icon: mdi:download-network-outline
+          - entity: sensor.unifi_network_lan_upload_total
+            name: LAN Uploaded
+            icon: mdi:upload-network-outline
+
+      # Network Latency
+      - type: sensor
+        entity: sensor.unifi_network_wan_latency
+        graph: line
+        name: WAN Latency
+        hours_to_show: 24
+        detail: 2
+
+  - title: Connected Devices
+    path: devices
+    icon: mdi:lan
+    cards:
+      # All tracked devices
+      - type: entity-filter
+        entities:
+          - device_tracker.*
+        state_filter:
+          - "home"
+        card:
+          type: entities
+          title: Online Devices
+          show_header_toggle: false

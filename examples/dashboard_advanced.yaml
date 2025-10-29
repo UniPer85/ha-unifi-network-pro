@@ -1,0 +1,210 @@
+# Advanced UniFi Network Pro Dashboard Configuration
+# Requires additional custom cards from HACS:
+# - mini-graph-card
+# - bar-card
+# - button-card
+
+title: UniFi Network Pro
+views:
+  - title: Network Dashboard
+    path: network-main
+    icon: mdi:router-network
+    badges: []
+    cards:
+      # Header with System Info
+      - type: custom:button-card
+        name: UniFi Network Controller
+        entity: sensor.unifi_network_uptime
+        show_state: true
+        show_label: true
+        label: |
+          [[[
+            const uptime = states['sensor.unifi_network_uptime'].state;
+            const days = Math.floor(uptime / 86400);
+            const hours = Math.floor((uptime % 86400) / 3600);
+            return `Uptime: ${days}d ${hours}h`;
+          ]]]
+        styles:
+          card:
+            - height: 80px
+          name:
+            - font-size: 18px
+            - font-weight: bold
+          label:
+            - font-size: 14px
+            - color: gray
+
+      # System Resources
+      - type: horizontal-stack
+        cards:
+          - type: custom:bar-card
+            entity: sensor.unifi_network_cpu_usage
+            name: CPU Usage
+            unit_of_measurement: "%"
+            icon: mdi:cpu-64-bit
+            severity:
+              - color: Green
+                from: 0
+                to: 50
+              - color: Orange
+                from: 51
+                to: 80
+              - color: Red
+                from: 81
+                to: 100
+          - type: custom:bar-card
+            entity: sensor.unifi_network_memory_usage
+            name: Memory Usage
+            unit_of_measurement: "%"
+            icon: mdi:memory
+            severity:
+              - color: Green
+                from: 0
+                to: 50
+              - color: Orange
+                from: 51
+                to: 80
+              - color: Red
+                from: 81
+                to: 100
+
+      # Network Speed Graphs
+      - type: custom:mini-graph-card
+        name: WAN Speed
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 3
+        font_size: 75
+        entities:
+          - entity: sensor.unifi_network_wan_download_speed
+            name: Download
+            color: "#03a9f4"
+            show_state: true
+          - entity: sensor.unifi_network_wan_upload_speed
+            name: Upload
+            color: "#4caf50"
+            show_state: true
+        show:
+          labels: true
+          labels_secondary: false
+
+      # Network Latency Graph
+      - type: custom:mini-graph-card
+        name: WAN Latency
+        hours_to_show: 24
+        points_per_hour: 4
+        line_width: 2
+        font_size: 75
+        entities:
+          - entity: sensor.unifi_network_wan_latency
+            name: Latency
+            color: "#ff9800"
+        show:
+          labels: true
+
+      # Connected Devices Count
+      - type: custom:mini-graph-card
+        name: Connected Devices
+        hours_to_show: 24
+        points_per_hour: 2
+        line_width: 2
+        font_size: 75
+        entities:
+          - entity: sensor.unifi_network_connected_clients
+            name: Clients
+            color: "#9c27b0"
+        show:
+          labels: true
+
+      # Data Transfer Statistics
+      - type: entities
+        title: Network Statistics
+        entities:
+          - entity: sensor.unifi_network_connected_clients
+            name: Connected Clients
+            icon: mdi:devices
+          - entity: sensor.unifi_network_wan_ip_address
+            name: Public IP
+            icon: mdi:ip-network
+          - type: divider
+          - entity: sensor.unifi_network_wan_download_total
+            name: Total Downloaded (WAN)
+          - entity: sensor.unifi_network_wan_upload_total
+            name: Total Uploaded (WAN)
+          - type: divider
+          - entity: sensor.unifi_network_lan_download_total
+            name: Total Downloaded (LAN)
+          - entity: sensor.unifi_network_lan_upload_total
+            name: Total Uploaded (LAN)
+
+  - title: Device Tracking
+    path: device-tracking
+    icon: mdi:devices
+    cards:
+      # Summary Card
+      - type: glance
+        title: Device Overview
+        entities:
+          - entity: sensor.unifi_network_connected_clients
+            name: Total Devices
+
+      # Online Devices
+      - type: entity-filter
+        entities:
+          - device_tracker.*
+        state_filter:
+          - "home"
+        card:
+          type: entities
+          title: Online Devices
+          show_header_toggle: false
+        show_empty: false
+
+      # Offline Devices
+      - type: entity-filter
+        entities:
+          - device_tracker.*
+        state_filter:
+          - "not_home"
+        card:
+          type: entities
+          title: Offline Devices
+          show_header_toggle: false
+        show_empty: false
+
+  - title: Network History
+    path: network-history
+    icon: mdi:chart-line
+    cards:
+      # Historical data graphs
+      - type: history-graph
+        title: Network Speed History (24h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.unifi_network_wan_download_speed
+            name: Download
+          - entity: sensor.unifi_network_wan_upload_speed
+            name: Upload
+
+      - type: history-graph
+        title: System Resources (24h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.unifi_network_cpu_usage
+            name: CPU
+          - entity: sensor.unifi_network_memory_usage
+            name: Memory
+
+      - type: history-graph
+        title: Connected Devices (24h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.unifi_network_connected_clients
+            name: Clients
+
+      - type: history-graph
+        title: WAN Latency (24h)
+        hours_to_show: 24
+        entities:
+          - entity: sensor.unifi_network_wan_latency
+            name: Latency
