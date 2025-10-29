@@ -52,6 +52,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         _LOGGER.info("Connecting to UniFi controller at %s", host)
         await client.login()
+
+        # Check available sites and log them for debugging
+        sites = await client.get_sites()
+        if sites:
+            _LOGGER.info("Found %d site(s) on controller", len(sites))
+            for site in sites:
+                _LOGGER.info("  - Site: %s (ID: %s)", site.get("desc", "Unknown"), site.get("name", "unknown"))
+        else:
+            _LOGGER.warning("No sites found - this might cause issues with device discovery")
+
     except Exception as err:
         _LOGGER.error("Error connecting to UniFi controller: %s", err)
         _LOGGER.error("If you have 2FA enabled, ensure you approved the login request")

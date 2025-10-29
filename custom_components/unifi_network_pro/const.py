@@ -8,6 +8,7 @@ DEFAULT_SITE_ID = "default"
 # UniFi API endpoints
 API_LOGIN = "/api/auth/login"
 API_LOGOUT = "/api/auth/logout"
+API_SITES = "/proxy/network/api/self/sites"
 API_CLIENTS = "/proxy/network/api/s/{site}/stat/sta"
 API_DEVICES = "/proxy/network/api/s/{site}/stat/device"
 API_HEALTH = "/proxy/network/api/s/{site}/stat/health"

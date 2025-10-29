@@ -15,6 +15,7 @@ from .const import (
     API_HEALTH,
     API_LOGIN,
     API_LOGOUT,
+    API_SITES,
     API_SYSTEM_INFO,
     DEFAULT_SITE_ID,
 )
@@ -220,6 +221,7 @@ class UniFiClient:
             API response data
         """
         url = f"{self.host}{endpoint.format(site=self.site_id)}"
+        _LOGGER.debug("Making API request to: %s", url)
 
         try:
             async with self.session.get(
@@ -229,7 +231,9 @@ class UniFiClient:
                     data = await response.json()
                     # Mark as authenticated if request succeeds
                     self._authenticated = True
-                    return data.get("data", [])
+                    result = data.get("data", [])
+                    _LOGGER.debug("API request successful, returned %d items", len(result) if isinstance(result, list) else 1)
+                    return result
                 elif response.status == 401:
                     _LOGGER.warning("Session expired (401), attempting to re-login")
                     self._authenticated = False
@@ -266,13 +270,40 @@ class UniFiClient:
             _LOGGER.error("Unexpected error during API request: %s", err)
             return []
 
+    async def get_sites(self) -> list[dict[str, Any]]:
+        """Get all available sites."""
+        try:
+            url = f"{self.host}{API_SITES}"
+            async with self.session.get(
+                url, headers=self._headers, ssl=self.verify_ssl, timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    sites = data.get("data", [])
+                    _LOGGER.info("Available sites: %s", [s.get("name") for s in sites])
+                    return sites
+                else:
+                    _LOGGER.error("Failed to get sites: status=%s", response.status)
+                    return []
+        except Exception as err:
+            _LOGGER.error("Error getting sites: %s", err)
+            return []
+
     async def get_clients(self) -> list[dict[str, Any]]:
         """Get all connected clients."""
-        return await self._make_request(API_CLIENTS)
+        clients = await self._make_request(API_CLIENTS)
+        _LOGGER.info("Found %d clients from API (site_id=%s)", len(clients), self.site_id)
+        if clients:
+            _LOGGER.debug("Sample client data: %s", clients[0] if clients else "None")
+        else:
+            _LOGGER.warning("No clients returned from API - this might indicate wrong site_id or API endpoint issue")
+        return clients
 
     async def get_devices(self) -> list[dict[str, Any]]:
         """Get all UniFi devices."""
-        return await self._make_request(API_DEVICES)
+        devices = await self._make_request(API_DEVICES)
+        _LOGGER.info("Found %d UniFi devices from API (site_id=%s)", len(devices), self.site_id)
+        return devices
 
     async def get_health(self) -> list[dict[str, Any]]:
         """Get system health information."""
