@@ -95,11 +95,12 @@ class UniFiClient:
         except Exception as err:
             _LOGGER.warning("Failed to save cookies: %s", err)
 
-    async def login(self, timeout: int = LOGIN_TIMEOUT) -> bool:
+    async def login(self, timeout: int = LOGIN_TIMEOUT, retry_for_2fa: bool = True) -> bool:
         """Log in to the UniFi controller.
 
         Args:
             timeout: Timeout in seconds (default 60s to allow for 2FA)
+            retry_for_2fa: If True, will poll for successful auth when 2FA is pending
 
         Returns:
             True if login successful, False otherwise
@@ -116,43 +117,75 @@ class UniFiClient:
             "remember": True,
         }
 
-        try:
-            _LOGGER.info("Attempting login to UniFi controller (timeout: %ds)", timeout)
-            _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app")
+        start_time = asyncio.get_event_loop().time()
+        attempt = 0
+        last_error = None
 
-            async with self.session.post(
-                url,
-                json=data,
-                headers=self._headers,
-                ssl=self.verify_ssl,
-                timeout=aiohttp.ClientTimeout(total=timeout)
-            ) as response:
-                if response.status == 200:
-                    _LOGGER.info("Successfully logged in to UniFi controller")
-                    self._authenticated = True
-                    # Save cookies for future sessions
-                    await self._save_cookies()
-                    return True
+        _LOGGER.info("Attempting login to UniFi controller (will retry for %ds if 2FA required)", timeout)
+        _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app now")
+
+        while (asyncio.get_event_loop().time() - start_time) < timeout:
+            attempt += 1
+            try:
+                async with self.session.post(
+                    url,
+                    json=data,
+                    headers=self._headers,
+                    ssl=self.verify_ssl,
+                    timeout=aiohttp.ClientTimeout(total=10)
+                ) as response:
+                    if response.status == 200:
+                        _LOGGER.info("Successfully logged in to UniFi controller (attempt %d)", attempt)
+                        self._authenticated = True
+                        # Save cookies for future sessions
+                        await self._save_cookies()
+                        return True
+                    else:
+                        response_data = await response.text()
+
+                        # Check if error indicates 2FA is pending
+                        if response.status == 401 and retry_for_2fa:
+                            if attempt == 1:
+                                _LOGGER.warning(
+                                    "Login pending 2FA approval - waiting for you to approve on Unifi Verify app..."
+                                )
+                            last_error = f"2FA approval pending (attempt {attempt})"
+                            # Wait 2 seconds before retrying
+                            await asyncio.sleep(2)
+                            continue
+                        else:
+                            _LOGGER.error(
+                                "Failed to login: status=%s, response=%s",
+                                response.status,
+                                response_data,
+                            )
+                            self._authenticated = False
+                            return False
+
+            except asyncio.TimeoutError:
+                _LOGGER.debug("Login attempt %d timed out, retrying...", attempt)
+                last_error = "Connection timeout"
+                await asyncio.sleep(2)
+                continue
+            except Exception as err:
+                if retry_for_2fa and (asyncio.get_event_loop().time() - start_time) < timeout:
+                    _LOGGER.debug("Login attempt %d failed: %s, retrying...", attempt, err)
+                    last_error = str(err)
+                    await asyncio.sleep(2)
+                    continue
                 else:
-                    error_text = await response.text()
-                    _LOGGER.error(
-                        "Failed to login: status=%s, response=%s",
-                        response.status,
-                        error_text,
-                    )
+                    _LOGGER.error("Login error: %s", err)
                     self._authenticated = False
-                    return False
-        except asyncio.TimeoutError:
-            _LOGGER.error(
-                "Login timeout after %ds - 2FA approval may not have been completed in time",
-                timeout
-            )
-            self._authenticated = False
-            raise
-        except Exception as err:
-            _LOGGER.error("Login error: %s", err)
-            self._authenticated = False
-            raise
+                    raise
+
+        # Timeout reached
+        _LOGGER.error(
+            "Login timeout after %ds - 2FA approval was not completed in time. Last error: %s",
+            timeout,
+            last_error
+        )
+        self._authenticated = False
+        return False
 
     async def logout(self) -> None:
         """Log out from the UniFi controller and clear saved cookies."""
