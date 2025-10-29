@@ -32,21 +32,23 @@ class UniFiClient:
     def __init__(
         self,
         host: str,
-        username: str,
-        password: str,
-        session: aiohttp.ClientSession,
+        username: str | None = None,
+        password: str | None = None,
+        session: aiohttp.ClientSession | None = None,
         verify_ssl: bool = False,
         cookie_file: Path | None = None,
+        api_token: str | None = None,
     ) -> None:
         """Initialize the UniFi client.
 
         Args:
             host: UniFi controller host URL
-            username: Username for authentication
-            password: Password for authentication
+            username: Username for authentication (not needed if using api_token)
+            password: Password for authentication (not needed if using api_token)
             session: aiohttp ClientSession
             verify_ssl: Whether to verify SSL certificates
             cookie_file: Optional path to store session cookies for persistence
+            api_token: Optional API token for authentication (alternative to username/password)
         """
         self.host = host.rstrip("/")
         self.username = username
@@ -55,14 +57,21 @@ class UniFiClient:
         self.verify_ssl = verify_ssl
         self.site_id = DEFAULT_SITE_ID
         self.cookie_file = cookie_file
+        self.api_token = api_token
         self._headers = {
             "Content-Type": "application/json",
         }
         self._authenticated = False
 
-        # Load saved cookies if available
-        if self.cookie_file and self.cookie_file.exists():
-            asyncio.create_task(self._load_cookies())
+        # If using API token, add it to headers and mark as authenticated
+        if self.api_token:
+            self._headers["X-API-KEY"] = self.api_token
+            self._authenticated = True
+            _LOGGER.info("Using API token authentication")
+        else:
+            # Load saved cookies if available (only for username/password auth)
+            if self.cookie_file and self.cookie_file.exists():
+                asyncio.create_task(self._load_cookies())
 
     async def _load_cookies(self) -> None:
         """Load saved cookies from file."""
@@ -106,6 +115,11 @@ class UniFiClient:
         Returns:
             True if login successful, False otherwise
         """
+        # Skip login if using API token
+        if self.api_token:
+            _LOGGER.debug("Using API token, skipping login")
+            return True
+
         # Check if we already have valid cookies
         if self._authenticated:
             _LOGGER.debug("Already authenticated, skipping login")

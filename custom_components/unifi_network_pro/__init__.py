@@ -30,24 +30,38 @@ SCAN_INTERVAL = timedelta(seconds=30)
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up UniFi Network Pro from a config entry."""
     host = entry.data[CONF_HOST]
-    username = entry.data[CONF_USERNAME]
-    password = entry.data[CONF_PASSWORD]
+    username = entry.data.get(CONF_USERNAME)
+    password = entry.data.get(CONF_PASSWORD)
+    api_token = entry.data.get("api_token")
     verify_ssl = entry.data.get(CONF_VERIFY_SSL, False)
 
-    # Create cookie storage path for persistent sessions
-    storage_path = Path(hass.config.path(f".storage/{DOMAIN}"))
-    storage_path.mkdir(parents=True, exist_ok=True)
-    cookie_file = storage_path / f"{entry.entry_id}_cookies.json"
-
     session = async_get_clientsession(hass, verify_ssl=verify_ssl)
-    client = UniFiClient(
-        host,
-        username,
-        password,
-        session,
-        verify_ssl,
-        cookie_file=cookie_file,
-    )
+
+    if api_token:
+        # Using API token authentication
+        _LOGGER.info("Setting up UniFi integration with API token")
+        client = UniFiClient(
+            host,
+            session=session,
+            verify_ssl=verify_ssl,
+            api_token=api_token,
+        )
+    else:
+        # Using username/password authentication
+        _LOGGER.info("Setting up UniFi integration with username/password")
+        # Create cookie storage path for persistent sessions
+        storage_path = Path(hass.config.path(f".storage/{DOMAIN}"))
+        storage_path.mkdir(parents=True, exist_ok=True)
+        cookie_file = storage_path / f"{entry.entry_id}_cookies.json"
+
+        client = UniFiClient(
+            host,
+            username=username,
+            password=password,
+            session=session,
+            verify_ssl=verify_ssl,
+            cookie_file=cookie_file,
+        )
 
     try:
         _LOGGER.info("Connecting to UniFi controller at %s", host)

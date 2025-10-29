@@ -3,19 +3,20 @@
     "step": {
       "user": {
         "title": "Connect to UniFi Network",
-        "description": "Enter your UniFi controller credentials",
+        "description": "Enter your UniFi controller credentials. Use either API Token (recommended) OR Username/Password.",
         "data": {
           "host": "Host (IP or hostname)",
-          "username": "Username",
-          "password": "Password",
-          "site_id": "Site ID",
+          "api_token": "API Token (from UDM Control Panel → Integrations)",
+          "username": "Username (leave empty if using API token)",
+          "password": "Password (leave empty if using API token)",
+          "site_id": "Site ID (usually 'default')",
           "verify_ssl": "Verify SSL Certificate"
         }
       }
     },
     "error": {
       "cannot_connect": "Failed to connect to the UniFi controller",
-      "invalid_auth": "Invalid authentication credentials",
+      "invalid_auth": "Invalid authentication credentials or API token",
       "unknown": "Unexpected error occurred"
     },
     "abort": {

@@ -13,16 +13,18 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .const import CONF_SITE_ID, DEFAULT_SITE_ID, DOMAIN
+from .const import CONF_API_TOKEN, CONF_SITE_ID, DEFAULT_SITE_ID, DOMAIN
 from .unifi_client import UniFiClient
 
 _LOGGER = logging.getLogger(__name__)
 
+# Schema for username/password authentication
 STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
-        vol.Required(CONF_USERNAME): str,
-        vol.Required(CONF_PASSWORD): str,
+        vol.Optional(CONF_USERNAME): str,
+        vol.Optional(CONF_PASSWORD): str,
+        vol.Optional(CONF_API_TOKEN): str,
         vol.Optional(CONF_SITE_ID, default=DEFAULT_SITE_ID): str,
         vol.Optional(CONF_VERIFY_SSL, default=False): bool,
     }
@@ -32,40 +34,58 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
 async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str, Any]:
     """Validate the user input allows us to connect.
 
-    This function will wait up to 60 seconds for login to complete,
-    allowing time for 2FA approval via Unifi Verify app.
+    Supports both username/password and API token authentication.
     """
     host = data[CONF_HOST]
     if not host.startswith("http"):
         host = f"https://{host}"
         data[CONF_HOST] = host
 
+    # Check if using API token or username/password
+    api_token = data.get(CONF_API_TOKEN)
+    username = data.get(CONF_USERNAME)
+    password = data.get(CONF_PASSWORD)
+
+    if not api_token and (not username or not password):
+        raise ValueError("Must provide either API token OR username and password")
+
     session = async_get_clientsession(hass, verify_ssl=data.get(CONF_VERIFY_SSL, False))
-    client = UniFiClient(
-        host,
-        data[CONF_USERNAME],
-        data[CONF_PASSWORD],
-        session,
-        data.get(CONF_VERIFY_SSL, False),
-    )
+
+    if api_token:
+        _LOGGER.info("Attempting to connect using API token...")
+        client = UniFiClient(
+            host,
+            session=session,
+            verify_ssl=data.get(CONF_VERIFY_SSL, False),
+            api_token=api_token,
+        )
+    else:
+        _LOGGER.info("Attempting to connect using username/password...")
+        _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app within 60 seconds")
+        client = UniFiClient(
+            host,
+            username=username,
+            password=password,
+            session=session,
+            verify_ssl=data.get(CONF_VERIFY_SSL, False),
+        )
 
     if CONF_SITE_ID in data:
         client.site_id = data[CONF_SITE_ID]
 
     try:
-        _LOGGER.info("Attempting to connect to UniFi controller...")
-        _LOGGER.info("If you have 2FA enabled, please approve the login on your Unifi Verify app within 60 seconds")
-
-        login_success = await client.login(timeout=60)  # 60 second timeout for 2FA
-        if not login_success:
-            raise ValueError("Login failed - check credentials or 2FA approval")
+        if not api_token:
+            login_success = await client.login(timeout=60)  # 60 second timeout for 2FA
+            if not login_success:
+                raise ValueError("Login failed - check credentials or 2FA approval")
     except Exception as err:
         _LOGGER.error("Connection failed: %s", err)
         raise
 
     # Test API access
     try:
-        await client.get_clients()
+        clients = await client.get_clients()
+        _LOGGER.info("Successfully connected! Found %d clients", len(clients))
     except Exception as err:
         _LOGGER.error("API access test failed: %s", err)
         raise

@@ -3,6 +3,7 @@
 DOMAIN = "unifi_network_pro"
 
 CONF_SITE_ID = "site_id"
+CONF_API_TOKEN = "api_token"
 DEFAULT_SITE_ID = "default"
 
 # UniFi API endpoints

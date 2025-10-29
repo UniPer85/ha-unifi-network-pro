@@ -4,6 +4,7 @@ A comprehensive Home Assistant custom integration for monitoring and managing Ub
 
 ## Features
 
+- **🔑 API Token Support**: Use UDM Pro API tokens for seamless authentication (recommended!)
 - **🔐 2FA Support**: Full support for Unifi Verify two-factor authentication with persistent sessions
 - **Real-time Network Monitoring**: Track network performance metrics including upload/download speeds, latency, and data usage
 - **Device Tracking**: Automatically discover and track all devices connected to your network
@@ -11,7 +12,7 @@ A comprehensive Home Assistant custom integration for monitoring and managing Ub
 - **Rich Entity Support**: Provides sensors and device trackers with comprehensive attributes
 - **Easy Configuration**: User-friendly config flow through the Home Assistant UI
 - **HACS Compatible**: Easy installation and updates through HACS
-- **Session Persistence**: Login once, stay authenticated across restarts (no repeated 2FA approvals)
+- **Dual Authentication**: Supports both API tokens and username/password authentication
 
 ## Sensors Provided
 
@@ -91,25 +92,46 @@ Each network client is automatically discovered and added as a device tracker en
 3. Search for "UniFi Network Pro"
 4. Click on the integration to start the setup
 
-### Step 2: Enter Connection Details
+### Step 2: Choose Authentication Method
 
-You'll be prompted to enter:
+**Option A: API Token (RECOMMENDED)**
 
-- **Host**: The IP address or hostname of your UDM Pro Max (e.g., `192.168.1.1` or `unifi.local`)
-- **Username**: Your UniFi controller username (typically the owner account)
+1. Create an API token in your UDM Pro Max:
+   - Control Panel → Settings → Admins & Users → API Access
+   - Click "Generate API Token"
+   - Name it "Home Assistant"
+   - Copy the token (you won't see it again!)
+
+2. In Home Assistant config form:
+   - **Host**: `192.168.1.1` (your UDM IP)
+   - **API Token**: Paste the token you copied
+   - **Username**: Leave empty
+   - **Password**: Leave empty
+   - **Site ID**: `default` (unless you renamed it)
+   - **Verify SSL**: Uncheck (unless you have a valid certificate)
+
+**See the detailed [API Token Setup Guide](API_TOKEN_SETUP.md) for step-by-step instructions.**
+
+**Option B: Username/Password (with 2FA)**
+
+- **Host**: Your UDM IP (e.g., `192.168.1.1`)
+- **Username**: Your UniFi controller username
 - **Password**: Your UniFi controller password
-- **Site ID**: The site ID (default is "default" for most installations)
-- **Verify SSL**: Whether to verify SSL certificates (leave unchecked for self-signed certificates)
+- **API Token**: Leave empty
+- **Site ID**: `default` (usually)
+- **Verify SSL**: Uncheck for self-signed certificates
 
-### Step 3: Complete Setup (with 2FA Support)
+### Step 3: Complete Setup
 
 - Click **Submit**
-- The integration will connect to your UniFi controller and validate credentials
-- **If you have 2FA enabled**: Check your **Unifi Verify app** and approve the login within 60 seconds
+- **If using API Token**: Connects immediately!
+- **If using Username/Password with 2FA**: Check your **Unifi Verify app** and approve within 60 seconds
 - Once successful, all sensors and device trackers will be automatically created
-- Your session will be saved - **no need to approve 2FA again on restart!**
 
-**📱 2FA Users**: See the detailed [2FA Setup Guide](2FA_SETUP.md) for more information about authentication, session persistence, and troubleshooting.
+**📱 Having issues?**
+- **API Token users**: See [API Token Setup Guide](API_TOKEN_SETUP.md)
+- **2FA users**: See [2FA Setup Guide](2FA_SETUP.md)
+- **Getting 401 errors**: Switch to API Token authentication!
 
 ## Dashboard Configuration
 
